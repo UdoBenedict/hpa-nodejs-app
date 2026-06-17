@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: node-api
+  labels:
+    app: nginx
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: node-api
+  template:
+    metadata:
+      labels:
+        app: node-api
+    spec:
+      containers:
+      - name: nodejs-app
+        image: udonwaigwe/nodejs-app:v1.0
+        ports:
+        - containerPort: 3000
+        env:
+        # The API connects to Mongo using the Service name
+        - name: MONGO_URL
+          value: "mongodb://mongo-svc:27017/mydb"
+        resources:
+          requests:
+            cpu: 100m # container needs at least 100m of CPU to run (requests). The HPA will scale up when the pod hits 50% of its requested CPU.
+            memory: 128Mi # container needs at least 128m of memory to run (requests)
+          limits:
+            cpu: 250m # container has a CPU limit of 250m.
+            memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-service
+  namespace: demo
+spec:
+  selector:
+    app: node-api
+  ports:
+    - port: 3000 # The port the service listens on inside the cluster
+      targetPort: 3000  # The port the application is actually running on in the Pod
+---
+#
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: api-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: node-api
+  minReplicas: 1
+  maxReplicas: 5
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization # Utilization is the ratio between the current usage of resource to the requested resources of the pod.
+        averageUtilization: 50 # the HPA controller will keep the average utilization of the pods in the scaling target at 50%
