@@ -1,0 +1,46 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongo-svc
+spec:
+  clusterIP: None # Headless Service. Directly routes traffic to the Pod IPs without a proxy layer
+  selector:
+    app: mongo
+  ports:
+  - port: 27017 # The port the service listens on inside the cluster
+    targetPort: 27017 # mongodb container port
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mongo-db
+spec:
+  serviceName: "mongo-svc" # Links this StatefulSet to the Headless Service above
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mongo
+  template:
+    metadata:
+      labels:
+        app: mongo
+    spec:
+      containers:
+      - name: mongo
+        image: mongo:latest
+        ports:
+        - containerPort: 27017
+        volumeMounts:
+        - name: mongo-storage
+          mountPath: /data/db
+  # The magic of StatefulSets: Auto-generates unique PVCs for each replica
+  volumeClaimTemplates:
+  - metadata:
+      name: mongo-storage
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      storageClassName: "standard" 
+      resources:
+        requests:
+          storage: 1Gi
